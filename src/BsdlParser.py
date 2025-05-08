@@ -19,10 +19,12 @@
 
 
 import sys
+import os
 
 from lark import Lark, Token, Tree
 
-EBNF_FILE_PATH = "./bsdl.lark"
+# This is the path to the EBNF file that defines the BSDL grammar.
+EBNF_FILE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bsdl.lark")
 
 
 class BSDL:
@@ -34,6 +36,14 @@ class BSDL:
 
     @staticmethod
     def ast_to_yaml(node, indent=""):
+        if (
+            len(indent) == 0
+            and isinstance(node, Tree)
+            and len(node.children) == 1
+        ):
+            # 处理根节点
+            node = node.children[0]
+
         indent += "  "
         if node is None:
             return
@@ -46,7 +56,10 @@ class BSDL:
             if len(node.children) == 1:
                 child = node.children[0]
                 # 处理同名字符串
-                if isinstance(child, Token) and child.type.lower() == str(child.value).lower():
+                if (
+                    isinstance(child, Token)
+                    and child.type.lower() == str(child.value).lower()
+                ):
                     yield f"{indent}  value: {repr(child.value)}"
                     return
 
@@ -54,7 +67,9 @@ class BSDL:
                 # 处理正则表达式名称
                 isAllRegexp = True
                 for child in node.children:
-                    if not isinstance(child, Token) or not (child.type[:7] == "__ANON_"):
+                    if not isinstance(child, Token) or not (
+                        child.type[:7] == "__ANON_"
+                    ):
                         isAllRegexp = False
                         break
                 if isAllRegexp:
@@ -66,7 +81,7 @@ class BSDL:
                 yield f"{indent}  children:"
                 for child in node.children:
                     yield from BSDL.ast_to_yaml(child, indent)
-        
+
 
 def main(filename):
     with open(filename) as f:
