@@ -42,22 +42,30 @@ class BSDL:
             yield f"{indent}  value: {repr(node.value)}"
         elif isinstance(node, Tree):
             yield f"{indent}- type: {node.data}"
+
             if len(node.children) == 1:
                 child = node.children[0]
-                if isinstance(child, Token) and child.type[:7] == "__ANON_":
-                    yield f"{indent}  value: {repr(child.value)}"
-                    return
-                elif isinstance(child, Token) and child.type.lower() == str(child.value).lower():
+                # 处理同名字符串
+                if isinstance(child, Token) and child.type.lower() == str(child.value).lower():
                     yield f"{indent}  value: {repr(child.value)}"
                     return
 
             if len(node.children) > 0:
+                # 处理正则表达式名称
+                isAllRegexp = True
+                for child in node.children:
+                    if not isinstance(child, Token) or not (child.type[:7] == "__ANON_"):
+                        isAllRegexp = False
+                        break
+                if isAllRegexp:
+                    for child in node.children:
+                        yield f"{indent}  value: {repr(child.value)}"
+                    return
+
+                # 处理其余情况
                 yield f"{indent}  children:"
                 for child in node.children:
                     yield from BSDL.ast_to_yaml(child, indent)
-        else:
-            yield f"{indent}- type: Unknown"
-            yield f"{indent}  value: {repr(node.value)}"
         
 
 def main(filename):
