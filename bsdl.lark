@@ -1,0 +1,466 @@
+# python-bsdl-parser
+#
+# Copyright (c) 2016, Forest Crossman <cyrozap@gmail.com>
+#
+# Permission to use, copy, modify, and/or distribute this software for any
+# purpose with or without fee is hereby granted, provided that the above
+# copyright notice and this permission notice appear in all copies.
+#
+# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+# ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+# ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+# OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ 
+
+# IEEE Std 1149.1-2013, Annex B 
+
+%import common.WS_INLINE
+ESCAPED_STRING: /[A-Za-z0-9\&'\(\)\[\]\*\,\-\+\.\:\;\<\=\>\_\/\t ]+/ 
+COMMENT: "--" /[^\n]*/ NEWLINE
+NEWLINE: "\n"
+%ignore COMMENT
+%ignore NEWLINE
+%ignore WS_INLINE
+
+
+# Lark
+start: bsdl_description
+
+# Template
+_separated{x, sep}: x (sep x)* [sep]
+_double_quote{x} : _quote x _quote
+_separated_quote{x, sep}: _separated{_double_quote{x}, sep}
+
+# Character definitions 
+_asterisk : "*"
+_colon : ":"
+_semicolon : ";"
+_colon_equal : ":="
+_comma : ","
+_left_brace : "{"
+_left_bracket : "["
+_left_paren : "("
+_minus_sign : "-"
+_period : "."
+_quote : "\""
+_right_brace : "}"
+_right_bracket : "]"
+_right_paren : ")"
+
+# B.5.1 
+_letters : /[A-Za-z]/ 
+_digit : /[0-9]/ 
+
+# B.5.4 
+_vhdl_identifier : /[0-9a-zA-Z_]+/ 
+_mnemonic_identifier : /[A-Za-z0-9\@\*\_\-\+\|\%\~\.]*[A-Za-z]+[A-Za-z0-9\@\*\_\-\+\|\%\~\.]*/ 
+_prefix_identifier : /[a-zA-Z][a-zA-Z0-9_]*/ 
+
+# B.5.5 
+_integer : /[0-9]+/
+_real : /[0-9]+\.[0-9]+([Ee][+-]?)?[0-9]*/ 
+_pattern : /[01Xx]+/ 
+_thirty_two_bit_pattern : _separated{ _pattern , "&"}
+_binary_pattern : /0[bB][01xX][01xX_]*/ 
+hex_pattern : /0[xX][0-9a-fA-FxX][0-9a-fA-FxX_]*/ 
+decimal_pattern : /[0-9]/ | /[1-9][0-9]+/ 
+
+# B.5.6 
+string : _separated{_double_quote{ESCAPED_STRING}, "&"}
+
+# B.5.7 
+information_tag : /<[A-Za-z0-9\&'\(\)\[\]\*\,\-\+\.\:\;\=\_]+>/ 
+
+# B.6.2 
+port_id : subscripted_port_name | port_name 
+port_name : _vhdl_identifier 
+subscripted_port_name : port_name _left_paren subscript _right_paren 
+subscript : _integer 
+instruction_name : _vhdl_identifier | "BYPASS" | "CLAMP" | "EXTEST" | "HIGHZ" | "IDCODE" 
+                 | "INTEST" | "PRELOAD" | "RUNBIST" | "SAMPLE" | "USERCODE" 
+                 | "ECIDCODE" | "CLAMP_HOLD" | "CLAMP_RELEASE" | "TMP_STATUS" 
+                 | "IC_RESET" | "INIT_SETUP" | "INIT_SETUP_CLAMP" | "INIT_RUN" 
+
+# B.8.1 
+_bsdl_desp_header        : "entity" component_name "is" _generic_parameter logical_port_description standard_use_statement use_statement* component_conformance_statement
+_bsdl_desp_pin           : device_package_pin_mappings [grouped_port_identification] scan_port_identification
+_bsdl_desp_register_begin: instruction_register_description [optional_register_description] [register_access_description] boundary_scan_register_description
+_bsdl_desp_other         : [runbist_description] [intest_description] [system_clock_description]
+_bsdl_desp_register_end  : register_mnemonics_description* register_fields_description* register_assembly_description* register_constraints_description* register_association_description*
+_bsdl_desp_end           : power_port_association_description* bsdl_extensions* [design_warning] "end" component_name _semicolon 
+bsdl_description        : _bsdl_desp_header _bsdl_desp_pin [compliance_enable_description] _bsdl_desp_register_begin _bsdl_desp_other _bsdl_desp_register_end _bsdl_desp_end
+
+
+component_name : _vhdl_identifier 
+
+# B.8.2 
+_generic_parameter : _generic_default | _generic_no_default 
+_generic_default : "generic" _left_paren "PHYSICAL_PIN_MAP" _colon "string" _right_paren _semicolon 
+_generic_no_default : "generic" _left_paren "PHYSICAL_PIN_MAP" _colon "string" _colon_equal default_device_package_type _right_paren _semicolon 
+default_device_package_type : _quote _vhdl_identifier _quote 
+
+# B.8.3 
+logical_port_description : "port" _left_paren [pin_spec ( _semicolon pin_spec )*] _right_paren _semicolon 
+pin_spec : (port_name | _separated{port_name, _comma}) _colon pin_type port_dimension 
+!pin_type : "in" | "out" | "buffer" | "inout" | "LINKAGE_INOUT" 
+         | "LINKAGE_BUFFER" | "LINKAGE_IN" | "LINKAGE_OUT" | "LINKAGE_MECHANICAL" 
+         | "POWER_0" | "POWER_POS" | "POWER_NEG" | "VREF_IN" | "VREF_OUT" | "linkage"
+!port_dimension : _bit_vector_spec | "bit" 
+
+_bit_vector_spec  : "bit_vector" _left_paren _range _right_paren 
+_range : up_range | down_range 
+up_range : _integer "to" _integer 
+down_range : _integer "downto" _integer 
+
+# B.8.4 
+standard_use_statement : "use" standard_package_name _period "all" _semicolon 
+standard_package_name : "STD_1149_1_1990" | "STD_1149_1_1994" | "STD_1149_1_2001" | "STD_1149_1_2013" 
+
+# B.8.5 
+use_statement : "use" user_package_name _period "all" _semicolon 
+user_package_name : _vhdl_identifier 
+
+# B.8.6 
+component_conformance_statement : "attribute" "COMPONENT_CONFORMANCE" "of" component_name _colon "entity" "is" conformance_string _semicolon 
+conformance_string : _quote conformance_identification _quote 
+conformance_identification : "STD_1149_1_1990" | "STD_1149_1_1993" | "STD_1149_1_2001" | "STD_1149_1_2013" 
+
+# B.8.7 
+device_package_pin_mappings : pin_map_statement pin_mappings 
+pin_map_statement : "attribute" "PIN_MAP" "of" component_name _colon "entity" "is" "PHYSICAL_PIN_MAP" _semicolon 
+pin_mappings : ( pin_mapping )+ 
+pin_mapping : "constant" pin_mapping_name _colon "PIN_MAP_STRING" ":=" map_string _semicolon 
+pin_mapping_name : _vhdl_identifier 
+map_string : string 
+port_map : (_comma)([port])* 
+port : port_name _colon pin_or_list 
+pin_or_list : pin_desc | pin_list 
+pin_list : _left_paren (_comma)([pin_desc])* _right_paren 
+pin_desc : "OPEN" | "TIE0" | "TIE1" | pin_id 
+pin_id : _integer | _vhdl_identifier 
+
+# B.8.8 
+grouped_port_identification : "attribute" "PORT_GROUPING" "of" component_name _colon "entity" "is" group_table_string _semicolon 
+group_table_string : string 
+group_table : (_comma)([twin_group_entry])* 
+twin_group_entry : twin_group_type _left_paren twin_group_list _right_paren 
+twin_group_type : "DIFFERENTIAL_VOLTAGE" | "DIFFERENTIAL_CURRENT" 
+twin_group_list : (_comma)([twin_group])* 
+twin_group : _left_paren representative_port _comma associated_port _right_paren 
+representative_port : port_id 
+associated_port : port_id 
+
+# B.8.9 
+scan_port_identification : ( scan_port_stmt )+ 
+scan_port_stmt : tck_stmt | tdi_stmt | tms_stmt | tdo_stmt | trst_stmt 
+tck_stmt : "attribute" "TAP_SCAN_CLOCK" "of" port_id _colon "signal" "is" _left_paren clock_record _right_paren _semicolon 
+tdi_stmt : "attribute" "TAP_SCAN_IN" "of" port_id _colon "signal" "is" "true" _semicolon 
+tms_stmt : "attribute" "TAP_SCAN_MODE" "of" port_id _colon "signal" "is" "true" _semicolon 
+tdo_stmt : "attribute" "TAP_SCAN_OUT" "of" port_id _colon "signal" "is" "true" _semicolon 
+trst_stmt : "attribute" "TAP_SCAN_RESET" "of" port_id _colon "signal" "is" "true" _semicolon 
+clock_record : _real _comma halt_state_value 
+halt_state_value : "LOW" | "BOTH" 
+
+# B.8.10 
+compliance_enable_description : "attribute" "COMPLIANCE_PATTERNS" "of" component_name _colon "entity" "is" compliance_pattern_string _semicolon 
+compliance_string : _quote _left_paren compliance_port_list _right_paren _left_paren pattern_list _right_paren _quote
+compliance_pattern_string : _separated{ compliance_string, "&" }
+compliance_port_list : (_comma)([port_id])* 
+pattern_list : (_comma)([_pattern])* 
+
+# B.8.11 
+instruction_register_description : instruction_length_stmt instruction_opcode_stmt instruction_capture_stmt [instruction_private_stmt] 
+instruction_length_stmt : "attribute" "INSTRUCTION_LENGTH" "of" component_name _colon "entity" "is" _integer _semicolon 
+instruction_opcode_stmt : "attribute" "INSTRUCTION_OPCODE" "of" component_name _colon "entity" "is" opcode_table_string _semicolon 
+instruction_capture_stmt : "attribute" "INSTRUCTION_CAPTURE" "of" component_name _colon "entity" "is" pattern_list_string _semicolon 
+instruction_private_stmt : "attribute" "INSTRUCTION_PRIVATE" "of" component_name _colon "entity" "is" instruction_list_string _semicolon 
+opcode_table_string : _separated_quote{ opcode_description, "&"}
+_opcode_description_inline : instruction_name _left_paren opcode_list _right_paren [_comma]
+_opcode_description_header : instruction_name _left_paren [opcode_list]
+_opcode_description_body   : opcode_list
+_opcode_description_tailer : [opcode_list] _right_paren [_comma]
+opcode_description : _opcode_description_inline | _opcode_description_header | _opcode_description_body | _opcode_description_tailer
+opcode_list : _separated{opcode, _comma} 
+opcode : _pattern 
+list_string: _quote opcode_list _quote
+pattern_list_string : _separated{ list_string, "&" }
+instruction_list_string : _separated{ instruction_list , "&" }
+instruction_list : _quote _separated{instruction_name, _comma} _quote
+
+# B.8.12 
+optional_register_description : optional_register_stmt [ optional_register_stmt ] 
+optional_register_stmt : idcode_statement | usercode_statement 
+idcode_statement : "attribute" "IDCODE_REGISTER" "of" component_name _colon "entity" "is" _separated_quote{thirty_two_bit_pattern_list , "&"} _semicolon 
+usercode_statement : "attribute" "USERCODE_REGISTER" "of" component_name _colon "entity" "is" _separated_quote{thirty_two_bit_pattern_list , "&"} _semicolon 
+thirty_two_bit_pattern_list : _separated{_thirty_two_bit_pattern, _comma}
+
+# B.8.13 
+register_access_description : "attribute" "REGISTER_ACCESS" "of" component_name _colon "entity" "is" register_access_string _semicolon 
+register_access_string : _separated_quote{ _separated{register_association, _comma}, "&"}
+register_association : [ register ] [ _left_paren ] instruction_capture_list [ _right_paren ] 
+instruction_capture_list : _separated{instruction_capture, _comma} 
+instruction_capture : instruction_name [ "CAPTURES" _pattern ] 
+register : std_fixed_register | std_var_register | design_specific_register 
+std_fixed_register : "BOUNDARY" | "BYPASS" | "DEVICE_ID" | "TMP_STATUS" 
+std_var_register : std_var_reg_name [ _left_bracket reg_length _right_bracket ] 
+std_var_reg_name : "ECID" | "INIT_DATA" | "INIT_STATUS" | "RESET_SELECT" 
+design_specific_register : _vhdl_identifier [ _left_bracket reg_length _right_bracket ] 
+reg_length : _integer | _asterisk 
+
+# B.8.14 
+boundary_scan_register_description : fixed_boundary_stmts | segment_boundary_stmts 
+fixed_boundary_stmts : boundary_length_stmt boundary_register_stmt 
+segment_boundary_stmts : assembled_boundary_length_stmt boundary_register_segments 
+boundary_length_stmt : "attribute" "BOUNDARY_LENGTH" "of" component_name _colon "entity" "is" register_length _semicolon 
+register_length : _integer 
+boundary_register_stmt : "attribute" "BOUNDARY_REGISTER" "of" component_name _colon "entity" "is" cell_table_string _semicolon 
+cell_table_string : _separated_quote{ cell_table , "&" }
+assembled_boundary_length_stmt : "attribute" "ASSEMBLED_BOUNDARY_LENGTH" "of" component_name _colon "entity" "is" _left_paren reset_length _comma register_length _right_paren _semicolon 
+reset_length : _integer 
+boundary_register_segments : ( boundary_register_segment )+ 
+boundary_register_segment : "attribute" "BOUNDARY_SEGMENT" "of" component_name _colon "entity" "is" boundary_segment_string _semicolon 
+boundary_segment_string :  _separated_quote{_separated{boundary_segment_list, _comma}, "&"}
+boundary_segment_list : boundary_segment_name _left_bracket boundary_segment_length _right_bracket _left_paren cell_table _right_paren 
+boundary_segment_name : _vhdl_identifier 
+boundary_segment_length : _integer 
+cell_table : _separated{cell_entry, _comma}
+cell_entry : cell_number _left_paren cell_info _right_paren 
+cell_number : _integer 
+cell_info : cell_spec [ _comma input_or_disable_spec ] 
+cell_spec : cell_name _comma port_id_or_null _comma function _comma safe_bit 
+cell_name : _vhdl_identifier 
+port_id_or_null : port_id | _asterisk 
+function : "INPUT"i | "OUTPUT2"i | "OUTPUT3"i | "CONTROL"i | "CONTROLR"i | "INTERNAL"i | "CLOCK"i | "BIDIR"i | "OBSERVE_ONLY"i 
+safe_bit : "0" | "1" | "X" 
+input_or_disable_spec : input_spec | disable_spec 
+input_spec : "EXTERN0"i | "EXTERN1"i | "PULL0"i | "PULL1"i | "OPEN0"i | "OPEN1"i | "KEEPER"i | "OPENX"i | "EXPECT1"i | "EXPECT0"i 
+disable_spec : ccell _comma disable_value _comma disable_result 
+ccell : _integer 
+disable_value : "0" | "1" 
+disable_result : "WEAK0"i | "WEAK1"i | "PULL0"i | "PULL1"i | "OPEN0"i | "OPEN1"i | "KEEPER"i | "Z"i 
+
+# B.8.15 
+runbist_description : "attribute" "RUNBIST_EXECUTION" "of" component_name _colon "entity" "is" "&"(_quote runbist_spec _quote)* _semicolon 
+runbist_spec : wait_spec _comma pin_state _comma signature_spec 
+wait_spec : "WAIT_DURATION" _left_paren duration_spec _right_paren 
+duration_spec : clock_cycles_list | time_and_clocks 
+time_and_clocks : time [ _comma clock_cycles_list ] 
+clock_cycles_list : (_comma)([clock_cycles])* 
+time : _real 
+clock_cycles : port_id _integer 
+pin_state : "OBSERVING" condition "AT_PINS" 
+condition : "HIGHZ" | "BOUNDARY" 
+signature_spec : "EXPECT_DATA" det_pattern 
+det_pattern : ( bit )+ 
+bit : "0" | "1" 
+
+# B.8.16 
+intest_description : "attribute" "INTEST_EXECUTION" "of" component_name _colon "entity" "is" "&"(_quote intest_spec _quote)* _semicolon 
+intest_spec : wait_spec _comma pin_state 
+
+# B.8.17 
+system_clock_description : "attribute" "SYSCLOCK_REQUIREMENTS" "of" entity_target "is" system_clock_description_string _semicolon 
+system_clock_description_string : _separated_quote{_separated{system_clock_requirement, _comma}, "&"}
+system_clock_requirement : _left_paren port_id _comma min_freq _comma max_freq _comma clocked_instructions _right_paren 
+min_freq : _real 
+max_freq : _real 
+clocked_instructions : (_comma)([clocked_instruction])* 
+clocked_instruction : "RUNBIST" | "INTEST" | "INIT_SETUP" | "INIT_SETUP_CLAMP" | "INIT_RUN" | "ECIDCODE" | "IC_RESET" | _vhdl_identifier 
+
+# B.8.18 
+register_mnemonics_description : "attribute" "REGISTER_MNEMONICS" "of" target "is" register_mnemonics_string _semicolon 
+target : entity_target | package_target 
+entity_target : component_name _colon "entity" 
+package_target : user_package_name _colon "package" 
+register_mnemonics_string : _separated_quote{_separated{mnemonic_definition, _comma}, "&"}
+mnemonic_definition : mnemonic_group_name _left_paren mnemonic_list _right_paren 
+mnemonic_group_name : _vhdl_identifier 
+mnemonic_list : (_comma)([mnemonic_assignment])* 
+mnemonic_assignment : _mnemonic_identifier _left_paren pattern_specification _right_paren [ information_tag ] 
+pattern_specification : _binary_pattern | hex_pattern | decimal_pattern | "others" 
+
+# B.8.19 
+register_fields_description : "attribute" "REGISTER_FIELDS" "of" target "is" register_fields_string _semicolon 
+register_fields_string : _separated_quote{_separated{register_field_list, _comma}, "&"}
+register_field_list : reg_or_seg_name _left_bracket reg_or_seg_length _right_bracket _left_paren register_fields _right_paren 
+reg_or_seg_name : tdr | segment_name 
+tdr : "BOUNDARY" | "BYPASS" | "DEVICE_ID" | "TMP_STATUS" 
+    | "ECID" | "INIT_DATA" | "INIT_STATUS" | "RESET_SELECT" 
+    | design_specific_tdr_name 
+segment_name : _vhdl_identifier 
+design_specific_tdr_name : _vhdl_identifier 
+reg_or_seg_length : _integer 
+register_fields : (_comma)([_left_paren register_field_element _right_paren])* 
+register_field_element : register_field | prefix_statement 
+register_field : extended_field_name field_length "is" bit_list_and_options 
+extended_field_name : prefix_string field_name 
+prefix_string : ( _prefix_identifier _period )*
+field_name : _vhdl_identifier 
+field_length : _left_bracket _integer _right_bracket 
+bit_list_and_options : bit_list ( field_options )* 
+field_options : type_assignment | value_assignment | reset_assignment 
+bit_list : _left_paren [ (_comma)([bit_field])* ] _right_paren 
+bit_field : _range | _integer 
+prefix_statement : "PREFIX" _integer prefix_name 
+prefix_name : _prefix_identifier | _minus_sign 
+
+# B.8.20 
+value_assignment : value_keyword _left_paren assignment _right_paren 
+value_keyword : "CAPTURES" | "DEFAULT" | "SAFE" | "RESETVAL" | user_extension 
+user_extension : "USER" _colon user_keyword 
+user_keyword : _vhdl_identifier 
+assignment : assignment_value | _asterisk | _minus_sign 
+assignment_value : _binary_pattern | hex_pattern | decimal_pattern | mnemonic_association 
+mnemonic_association : [ "PACKAGE" package_hierarchy _colon ] mnemonic_group_name _left_paren mnemonic_default _right_paren 
+mnemonic_default : _mnemonic_identifier | _asterisk | _minus_sign 
+type_assignment : "NOPI" | "NOPO" | "NOUPD" | "MON" | "PULSE0" | "PULSE1" 
+                | "DELAYPO" | "NORETAIN" | "SHARED" | user_extension 
+reset_assignment : "PORRESET" | "TRSTRESET" | "TAPRESET" | "CHRESET" 
+                 | "DOMPOR" | "HIERRESET" | local_reset_assignment 
+local_reset_assignment : reset_type _left_paren reset_ident _right_paren 
+reset_type : "RESETOUT" | "RESETIN" 
+reset_ident : _vhdl_identifier 
+domain_assignment : association_type _left_paren association_name _right_paren 
+association_type : "DOMAIN" | "DOMAIN_EXTERNAL" | "SEGMENT" 
+association_name : _vhdl_identifier 
+
+# B.8.21 
+register_assembly_description : "attribute" "REGISTER_ASSEMBLY" "of" target "is" register_assembly_string _semicolon 
+register_assembly_string : _separated_quote{_separated{register_assembly_list, _comma}, "&"}
+register_assembly_list : reg_or_seg_name _left_paren register_assembly_elements _right_paren 
+register_assembly_elements : (_comma)([_left_paren register_element _right_paren])* 
+register_element : instance_and_options | field_and_options | instance_reference | selected_segment_element | boundary_instance | using_statement 
+instance_and_options : instance_definition ( field_assignments )* 
+instance_definition : instance_ident "is" [ "PACKAGE" package_hierarchy _colon ] reg_or_seg_name 
+instance_ident : segment_ident | array_ident 
+segment_ident : _vhdl_identifier 
+array_ident : "ARRAY" array_segment_ident _left_paren _range _right_paren 
+array_segment_ident : _vhdl_identifier 
+field_assignments : field_value_assignment | field_reset_assignment | field_domain_assignment | field_selection_assignment 
+field_value_assignment : [ field_ident _colon ] value_assignment 
+field_reset_assignment : [ field_ident _colon ] reset_assignment 
+field_domain_assignment : [ field_ident _colon ] domain_assignment 
+field_ident : ( instance_name _period )* field_name 
+instance_name : segment_ident | array_instances 
+array_instances : array_segment_ident bit_list 
+field_and_options : field_name field_length ( field_options )* 
+instance_reference : segment_ident | array_instance 
+array_instance : array_segment_ident _left_paren index _right_paren 
+index : _integer 
+selected_segment_element : "SELECTMUX" (_comma)([_left_paren selectable_segment _right_paren])* field_selection_assignment 
+selectable_segment : instance_and_options | instance_reference 
+field_selection_assignment : selection_field selection_values [ broadcast_field broadcast_values ] 
+selection_field : "SELECTFIELD" _left_paren field_reference _right_paren 
+field_reference : ( instance_reference _period )* field_name 
+selection_values : "SELECTVALUES" _left_paren segment_selection ( segment_selection )* _right_paren 
+segment_selection : _left_paren instance_reference _colon (_comma)([field_value])* _right_paren 
+field_value : _mnemonic_identifier | _binary_pattern | hex_pattern | decimal_pattern 
+broadcast_field : "BROADCASTFIELD" _left_paren field_reference _right_paren 
+broadcast_values : "BROADCASTVALUES" _left_paren broadcast_selection ( broadcast_selection )* _right_paren 
+broadcast_selection : _left_paren (_comma)([instance_reference])* _colon (_comma)([field_value])* _right_paren 
+boundary_instance : segment_ident "is" [ "PACKAGE" package_hierarchy _colon ] boundary_segment_name 
+using_statement : "USING" package_prefix 
+package_prefix : package_hierarchy | _minus_sign 
+package_hierarchy : user_package_name ( _period user_package_name )* 
+
+# B.8.22 
+register_constraints_description : "attribute" "REGISTER_CONSTRAINTS" "of" target "is" constraints_string _semicolon 
+constraints_string : _separated_quote{_separated{constraints_list, _comma}, "&"}
+constraints_list : constraint_domain _left_paren constraint_checks _right_paren 
+constraint_domain : reg_or_seg_name | "entity" | "package" 
+constraint_checks : (_comma)([_left_paren check_expression _right_paren constraint_severity information_tag])*
+constraint_severity : "error" | "warning" | "info" 
+check_expression : short_expression | binary_expr 
+short_expression : nested_expr | unary_expr | field_reference | oper_val 
+nested_expr : _left_paren check_expression _right_paren 
+unary_expr : logical_inv_expr | bit_wise_inv_expr | one_hot_expr 
+logical_inv_expr : logical_inversion short_expression 
+bit_wise_inv_expr : bit_wise_inversion short_expression 
+one_hot_expr : one_hot nested_expr 
+binary_expr : short_expression binary_operator check_expression 
+binary_operator : exponentiation | multiplication | division | remainder 
+                | addition | subtraction | right_shift | left_shift | less_than | greater_than 
+                | less_than_or_equal | greater_than_or_equal | equals | not_equals 
+                | bit_wise_and | bit_wise_xor | bit_wise_or | logical_and | logical_or 
+oper_val : mnemonic_pattern | _binary_pattern | hex_pattern | decimal_pattern 
+mnemonic_pattern : [ [ "PACKAGE" package_hierarchy _colon ] mnemonic_group_name ] _left_brace _mnemonic_identifier _right_brace 
+logical_inversion : "!"
+bit_wise_inversion : "~"
+one_hot : "one_hot"
+exponentiation : "**"
+multiplication : "*"
+division : "/"
+remainder : "%"
+addition : "+"
+subtraction : "-"
+left_shift : "<<"
+right_shift : ">>"
+less_than : "<"
+greater_than : ">"
+less_than_or_equal : "<="
+greater_than_or_equal : ">="
+equals : "=="
+not_equals : "!="
+bit_wise_and : "&"
+bit_wise_xor : "^"
+bit_wise_or : "|"
+logical_and : "&&"
+logical_or : "||"
+
+# B.8.23 
+register_association_description : "attribute" "REGISTER_ASSOCIATION" "of" target "is" register_association_string _semicolon 
+register_association_string : _separated_quote{_separated{register_association_list, _comma}, "&"}
+register_association_list : reg_field_or_instance _colon ( association_list )+ 
+reg_field_or_instance : field_or_instance_name [ _left_paren index _right_paren ] 
+field_or_instance_name : extended_field_name | segment_ident | array_segment_ident | tdr 
+association_list : port_list | info_list | clock_list | user_list | unit 
+port_list : "port" port_association_list 
+port_association_list : _left_paren (_comma)([port_id])* _right_paren 
+info_list : "info" _left_paren (_comma)([information_tag])* _right_paren 
+clock_list : "sysclock" _left_paren (_comma)([port_id])* _right_paren 
+user_list : "user" user_list_name _left_paren single_or_multi_list _right_paren 
+user_list_name : _vhdl_identifier 
+single_or_multi_list : single_word_user_list | multi_word_user_list 
+single_word_user_list : (_comma)([_vhdl_identifier])* 
+multi_word_user_list : (_comma)([information_tag])* 
+unit : "unit" _left_paren unit_name unit_definition _right_paren 
+unit_definition : _left_brace unit_value [ unit_scale ] [ unit_link ] _right_brace 
+unit_name : _vhdl_identifier 
+unit_value : hex_pattern 
+unit_scale : _real 
+unit_link : information_tag 
+power_port_association_description : "attribute" "POWER_PORT_ASSOCIATION" "of" entity_target "is" power_port_association_string _semicolon 
+power_port_association_string : _separated_quote{_separated{power_port_association_list, _comma}, "&"}
+power_port_association_list : power_port_id _colon port_association_list 
+power_port_id : port_id 
+
+# B.8.24 
+bsdl_extensions : extension_declaration | extension_definition 
+extension_declaration : "attribute" extension_name _colon "BSDL_EXTENSION" _semicolon 
+extension_definition : "attribute" extension_name "of" target "is" extension_parameter_string _semicolon 
+extension_name : entity_defined_name | bsdl_package_defined_name 
+entity_defined_name : _vhdl_identifier 
+bsdl_package_defined_name : _vhdl_identifier 
+extension_parameter_string : string 
+
+# B.8.25 
+design_warning : "attribute" "DESIGN_WARNING" "of" target "is" string _semicolon 
+
+# B.10 
+user_package : _user_package_stmt _user_package_body 
+_user_package_stmt : "package" user_package_name "is" standard_use_statement ( deferred_constant )* ( extension_declaration )* "end" user_package_name _semicolon 
+deferred_constant : "constant" cell_name _colon "CELL_INFO" _semicolon 
+_user_package_body_header: "package" "body" user_package_name "is" standard_use_statement ( use_statement )*
+_user_package_body_register: ( register_mnemonics_description )* ( register_fields_description )* ( register_assembly_description )* ( register_constraints_description )* ( register_association_description )*
+_user_package_body : _user_package_body_header ( cell_description_constant )* _user_package_body_register ( extension_definition )* [ design_warning ] "end" user_package_name _semicolon 
+
+cell_description_constant : "constant" cell_name _colon "CELL_INFO" _colon_equal _left_paren capture_descriptor_list _right_paren _semicolon 
+capture_descriptor_list : (_comma)([capture_descriptor])* 
+capture_descriptor : _left_paren cell_context _comma capture_instruction _comma data_source _right_paren 
+cell_context : "INPUT" | "OUTPUT2" | "OUTPUT3" | "INTERNAL" | "CONTROL" | "CONTROLR" | "CLOCK" | "BIDIR_IN" | "BIDIR_OUT" | "OBSERVE_ONLY" 
+capture_instruction : "EXTEST" | "SAMPLE" | "INTEST" 
+data_source : "PI" | "PO" | "CAP" | "UPD" | "ZERO" | "ONE" | "X" 
+

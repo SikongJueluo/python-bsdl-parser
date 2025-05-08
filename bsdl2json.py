@@ -18,29 +18,55 @@
 #
 
 
-import json
 import sys
 
-import bsdl
+from lark import Lark, Token, Tree
+
+EBNF_FILE_PATH = "./bsdl.lark"
 
 
-class BsdlSemantics:
-    def map_string(self, ast):
-        parser = bsdl.bsdlParser()
-        ast = parser.parse(''.join(ast), "port_map")
-        return ast
+class BSDL:
+    @staticmethod
+    def bsdlParser() -> Lark:
+        with open(EBNF_FILE_PATH, "r", encoding="utf-8") as file:
+            ebnfContent = file.read()
+        return Lark(ebnfContent)
 
-    def grouped_port_identification(self, ast):
-        parser = bsdl.bsdlParser()
-        ast = parser.parse(''.join(ast), "group_table")
-        return ast
+    @staticmethod
+    def ast_to_yaml(node, indent=""):
+        indent += "  "
+        if node is None:
+            return
+        elif isinstance(node, Token):
+            yield f"{indent}- type: {node.type}"
+            yield f"{indent}  value: {repr(node.value)}"
+        elif isinstance(node, Tree):
+            yield f"{indent}- type: {node.data}"
+            if len(node.children) == 1:
+                child = node.children[0]
+                if isinstance(child, Token) and child.type[:7] == "__ANON_":
+                    yield f"{indent}  value: {repr(child.value)}"
+                    return
+                elif isinstance(child, Token) and child.type.lower() == str(child.value).lower():
+                    yield f"{indent}  value: {repr(child.value)}"
+                    return
+
+            if len(node.children) > 0:
+                yield f"{indent}  children:"
+                for child in node.children:
+                    yield from BSDL.ast_to_yaml(child, indent)
+        else:
+            yield f"{indent}- type: Unknown"
+            yield f"{indent}  value: {repr(node.value)}"
+        
 
 def main(filename):
     with open(filename) as f:
         text = f.read()
-        parser = bsdl.bsdlParser()
-        ast = parser.parse(text, "bsdl_description", semantics=BsdlSemantics(), parseinfo=False)
-        print(json.dumps(ast.asjson()))
+        parser = BSDL.bsdlParser()
+        ast = parser.parse(text)
+        for line in BSDL.ast_to_yaml(ast):
+            print(line)
 
 
 if __name__ == "__main__":

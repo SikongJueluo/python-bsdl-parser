@@ -1,1 +1,7 @@
 bsdl.py
+.direnv
+.venv
+
+# Generate
+*.json
+*.yaml
