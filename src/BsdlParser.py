@@ -81,6 +81,34 @@ class BSDL:
                 yield f"{indent}  children:"
                 for child in node.children:
                     yield from BSDL.ast_to_yaml(child, indent)
+    
+    @staticmethod
+    def ast_to_dict(node):
+        if isinstance(node, Token):
+            return {"type": node.type, "value": node.value}
+        elif isinstance(node, Tree):
+            return {
+                "type": node.data,
+                "children": [BSDL.ast_to_dict(child) for child in node.children],
+            }
+        else:
+            return None
+    
+    @staticmethod
+    def find_type(node, type_name):
+        if isinstance(node, Token):
+            if node.type == type_name:
+                return node
+            return None
+
+        elif isinstance(node, Tree):
+            if node.data == type_name:
+                return node
+            for child in node.children:
+                result = BSDL.find_type(child, type_name)
+                if result is not None:
+                    return result
+        return None
 
 
 def main(filename):
