@@ -3,5 +3,6 @@ bsdl.py
 .venv
 
 # Generate
+**/__pycache__/
 *.json
 *.yaml

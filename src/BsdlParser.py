@@ -18,8 +18,8 @@
 #
 
 
-import sys
 import os
+from functools import singledispatch
 
 from lark import Lark, Token, Tree
 
@@ -27,7 +27,49 @@ from lark import Lark, Token, Tree
 EBNF_FILE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bsdl.lark")
 
 
-class BSDL:
+@singledispatch
+def node_to_dict(token: Token, isSeperate=True):
+    if isSeperate:
+        return dict(
+            type=token.type,
+            value=str(token.value),
+        )
+    else:
+        return {token.type: str(token.value)}
+
+@node_to_dict.register
+def _(type: str, value:list, isSeperate: bool = True):
+    if isSeperate:
+        return dict(
+            type=type,
+            children=value,
+        )
+    else:
+        dictValue = {}
+        if isinstance(value, dict):
+            for key, val in value.items():
+                if isinstance(key, str):
+                    dictValue[key] = val
+                else:
+                    dictValue[str(key)] = val
+        else:  # list
+            for i, item in enumerate(value):
+                dictValue[str(i)] = item
+        return {type: dictValue}
+
+
+@node_to_dict.register
+def _(type: str, value, isSeperate: bool = True):
+    if isSeperate:
+        return dict(
+            type=type,
+            value=str(value),
+        )
+    else:
+        return {type: str(value)}
+
+
+class BsdlParser:
     @staticmethod
     def bsdlParser() -> Lark:
         with open(EBNF_FILE_PATH, "r", encoding="utf-8") as file:
@@ -35,24 +77,17 @@ class BSDL:
         return Lark(ebnfContent)
 
     @staticmethod
-    def ast_to_yaml(node, indent=""):
-        if (
-            len(indent) == 0
-            and isinstance(node, Tree)
-            and len(node.children) == 1
-        ):
+    def ast_to_dict(node, isSeperate=False, _depth=0):
+        if _depth == 0 and isinstance(node, Tree) and len(node.children) == 1:
             # 处理根节点
             node = node.children[0]
 
-        indent += "  "
+        _depth += 1
         if node is None:
             return
         elif isinstance(node, Token):
-            yield f"{indent}- type: {node.type}"
-            yield f"{indent}  value: {repr(node.value)}"
+            return node_to_dict(node, isSeperate)
         elif isinstance(node, Tree):
-            yield f"{indent}- type: {node.data}"
-
             if len(node.children) == 1:
                 child = node.children[0]
                 # 处理同名字符串
@@ -60,8 +95,7 @@ class BSDL:
                     isinstance(child, Token)
                     and child.type.lower() == str(child.value).lower()
                 ):
-                    yield f"{indent}  value: {repr(child.value)}"
-                    return
+                    return node_to_dict(node.data, child.value, isSeperate)
 
             if len(node.children) > 0:
                 # 处理正则表达式名称
@@ -73,27 +107,16 @@ class BSDL:
                         isAllRegexp = False
                         break
                 if isAllRegexp:
-                    for child in node.children:
-                        yield f"{indent}  value: {repr(child.value)}"
-                    return
+                    return node_to_dict(node.data, child.value, isSeperate)
 
                 # 处理其余情况
-                yield f"{indent}  children:"
+                children = []
                 for child in node.children:
-                    yield from BSDL.ast_to_yaml(child, indent)
-    
-    @staticmethod
-    def ast_to_dict(node):
-        if isinstance(node, Token):
-            return {"type": node.type, "value": node.value}
-        elif isinstance(node, Tree):
-            return {
-                "type": node.data,
-                "children": [BSDL.ast_to_dict(child) for child in node.children],
-            }
-        else:
-            return None
-    
+                    childNode = BsdlParser.ast_to_dict(child, _depth)
+                    if childNode is not None:
+                        children.append(childNode)
+                return node_to_dict(node.data, children, isSeperate)
+
     @staticmethod
     def find_type(node, type_name):
         if isinstance(node, Token):
@@ -105,20 +128,7 @@ class BSDL:
             if node.data == type_name:
                 return node
             for child in node.children:
-                result = BSDL.find_type(child, type_name)
+                result = BsdlParser.find_type(child, type_name)
                 if result is not None:
                     return result
         return None
-
-
-def main(filename):
-    with open(filename) as f:
-        text = f.read()
-        parser = BSDL.bsdlParser()
-        ast = parser.parse(text)
-        for line in BSDL.ast_to_yaml(ast):
-            print(line)
-
-
-if __name__ == "__main__":
-    main(sys.argv[1])
