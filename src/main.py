@@ -8,7 +8,7 @@ def main():
     )
     parser.add_argument("filename", help="BSDL file to parse", type=str)
     parser.add_argument("--output", help="Output file", type=str, default="output.json")
-    parser.add_argument("--seperate", help="Separate output", type=bool, default=True)
+    parser.add_argument("--seperate", help="Separate output", type=bool, default=False)
     args = parser.parse_args()
 
     with open(args.filename) as f:

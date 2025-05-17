@@ -20,6 +20,7 @@
 
 import os
 from functools import singledispatch
+from typing import Any
 
 from lark import Lark, Token, Tree
 
@@ -28,7 +29,7 @@ EBNF_FILE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bsdl.
 
 
 @singledispatch
-def node_to_dict(token: Token, isSeperate=True):
+def node_to_dict(token: Token, isSeperate=True) -> dict[str,Any]:
     if isSeperate:
         return dict(
             type=token.type,
@@ -38,35 +39,32 @@ def node_to_dict(token: Token, isSeperate=True):
         return {token.type: str(token.value)}
 
 @node_to_dict.register
-def _(type: str, value:list, isSeperate: bool = True):
-    if isSeperate:
-        return dict(
-            type=type,
-            children=value,
-        )
-    else:
-        dictValue = {}
-        if isinstance(value, dict):
-            for key, val in value.items():
-                if isinstance(key, str):
-                    dictValue[key] = val
-                else:
-                    dictValue[str(key)] = val
-        else:  # list
-            for i, item in enumerate(value):
-                dictValue[str(i)] = item
-        return {type: dictValue}
-
-
-@node_to_dict.register
 def _(type: str, value, isSeperate: bool = True):
-    if isSeperate:
-        return dict(
-            type=type,
-            value=str(value),
-        )
+    if isinstance(value, list):
+        if isSeperate:
+            return dict(
+                type=type,
+                children=value,
+            )
+        else:
+            unWrappedDict = {}
+            for item in value:
+                if isinstance(item, dict) and len(item) == 1:
+                    unWrappedDict[list(item.keys())[0]] = list( item.values() )[0]
+                else:
+                    break
+            if len(unWrappedDict) == len(value):
+                return unWrappedDict
+            else:
+                return {type: value}
     else:
-        return {type: str(value)}
+        if isSeperate:
+            return dict(
+                type=type,
+                value=str(value),
+            )
+        else:
+            return {type: str(value)}
 
 
 class BsdlParser:
@@ -75,6 +73,13 @@ class BsdlParser:
         with open(EBNF_FILE_PATH, "r", encoding="utf-8") as file:
             ebnfContent = file.read()
         return Lark(ebnfContent)
+
+    @staticmethod
+    def ast_process(node:Tree, _depth = 0):
+        if _depth == 0 and isinstance(node, Tree) and len(node.children) == 1:
+            # 处理根节点
+            node = node.children[0]
+
 
     @staticmethod
     def ast_to_dict(node, isSeperate=False, _depth=0):
@@ -96,23 +101,24 @@ class BsdlParser:
                     and child.type.lower() == str(child.value).lower()
                 ):
                     return node_to_dict(node.data, child.value, isSeperate)
-
-            if len(node.children) > 0:
+            else:
                 # 处理正则表达式名称
                 isAllRegexp = True
+                regexDict = {}
                 for child in node.children:
                     if not isinstance(child, Token) or not (
                         child.type[:7] == "__ANON_"
                     ):
                         isAllRegexp = False
                         break
+                    regexDict[child.type] = child.value
                 if isAllRegexp:
-                    return node_to_dict(node.data, child.value, isSeperate)
+                    return node_to_dict(node.data, regexDict, isSeperate)
 
                 # 处理其余情况
                 children = []
                 for child in node.children:
-                    childNode = BsdlParser.ast_to_dict(child, _depth)
+                    childNode = BsdlParser.ast_to_dict(child, isSeperate, _depth)
                     if childNode is not None:
                         children.append(childNode)
                 return node_to_dict(node.data, children, isSeperate)
