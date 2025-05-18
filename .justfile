@@ -11,3 +11,9 @@ test-get-port:
 
 test-get-boundary-reg:
   python src/main.py test/PG2L100H_FBG676.bsm --output test/output.json --method GetBoundaryScanRegDesp
+
+test-print-port:
+  python src/main.py test/PG2L100H_FBG676.bsm --output test/output.json --format str --method GetLogicPortDesp
+
+test-print-boundary-reg:
+  python src/main.py test/PG2L100H_FBG676.bsm --output test/output.json --format str --method GetBoundaryScanRegDesp

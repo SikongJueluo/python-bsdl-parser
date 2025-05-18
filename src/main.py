@@ -24,7 +24,7 @@ def main():
         if args.method is None:
             bsdl_parser = BsdlParser(args.filename)
             bsdl_parser.ToJson(args.output, args.type, args.seperate)
-            
+
         if args.method == "GetLogicPortDesp":
             bsdl_parser = BsdlParser(args.filename)
             result = bsdl_parser.GetLogicPortDesp()
@@ -38,10 +38,20 @@ def main():
         else:
             raise ValueError("Invalid method for JSON output format.")
     elif args.format == "str":
+        if args.method is None:
+            bsdl_parser = BsdlParser(args.filename)
+            print(bsdl_parser.ToDict(args.type, args.seperate))
+
         if args.method == "GetLogicPortDesp":
             bsdl_parser = BsdlParser(args.filename)
             result = bsdl_parser.GetLogicPortDesp()
-            print(result)
+            print(json.dumps(result, indent=2))
+        elif args.method == "GetBoundaryScanRegDesp":
+            bsdl_parser = BsdlParser(args.filename)
+            result = bsdl_parser.GetBoundaryScanRegDesp()
+            print(json.dumps(result, indent=2))
+        else:
+            raise ValueError("Invalid method for JSON output format.")
 
 
 if __name__ == "__main__":
