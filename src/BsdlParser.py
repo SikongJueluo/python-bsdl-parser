@@ -24,7 +24,7 @@ import json
 from lark import Lark, Token, Tree
 
 # This is the path to the EBNF file that defines the BSDL grammar.
-EBNF_FILE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bsdl.lark")
+EBNF_FILE_PATH = os.path.join(os.path.dirname(__file__), "bsdl.lark")
 
 
 def NodeToDict(type: str, value, isSeperate: bool = True):

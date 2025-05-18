@@ -6,3 +6,9 @@ bsdl.py
 **/__pycache__/
 *.json
 *.yaml
+main.build
+main.bin
+main.dist
+main.onefile-build
+output
+dist
