@@ -70,7 +70,7 @@ hex_pattern : /0[xX][0-9a-fA-FxX][0-9a-fA-FxX_]*/
 decimal_pattern : /[0-9]/ | /[1-9][0-9]+/ 
 
 # B.5.6 
-string : _separated{_double_quote{ESCAPED_STRING}, "&"}
+_string : _separated{_double_quote{ESCAPED_STRING}, "&"}
 
 # B.5.7 
 information_tag : /<[A-Za-z0-9\&'\(\)\[\]\*\,\-\+\.\:\;\=\_]+>/ 
@@ -135,7 +135,7 @@ pin_map_statement : "attribute" "PIN_MAP" "of" component_name _colon "entity" "i
 pin_mappings : ( pin_mapping )+ 
 pin_mapping : "constant" pin_mapping_name _colon "PIN_MAP_STRING" ":=" map_string _semicolon 
 pin_mapping_name : _vhdl_identifier 
-map_string : string 
+map_string : _string 
 port_map : (_comma)([port])* 
 port : port_name _colon pin_or_list 
 pin_or_list : pin_desc | pin_list 
@@ -145,7 +145,7 @@ pin_id : _integer | _vhdl_identifier
 
 # B.8.8 
 grouped_port_identification : "attribute" "PORT_GROUPING" "of" component_name _colon "entity" "is" group_table_string _semicolon 
-group_table_string : string 
+group_table_string : _string 
 group_table : (_comma)([twin_group_entry])* 
 twin_group_entry : twin_group_type _left_paren twin_group_list _right_paren 
 twin_group_type : "DIFFERENTIAL_VOLTAGE" | "DIFFERENTIAL_CURRENT" 
@@ -444,10 +444,10 @@ extension_definition : "attribute" extension_name "of" target "is" extension_par
 extension_name : entity_defined_name | bsdl_package_defined_name 
 entity_defined_name : _vhdl_identifier 
 bsdl_package_defined_name : _vhdl_identifier 
-extension_parameter_string : string 
+extension_parameter_string : _string 
 
 # B.8.25 
-design_warning : "attribute" "DESIGN_WARNING" "of" target "is" string _semicolon 
+design_warning : "attribute" "DESIGN_WARNING" "of" target "is" _string _semicolon 
 
 # B.10 
 user_package : _user_package_stmt _user_package_body 
