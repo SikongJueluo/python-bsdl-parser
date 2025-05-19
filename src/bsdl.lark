@@ -31,6 +31,7 @@ start: bsdl_description
 
 # Template
 _separated{x, sep}: x (sep x)* [sep]
+_multistring{x, sep}: x (sep ["\"&"] ["\""] x)* [sep]
 _double_quote{x} : _quote x _quote
 _separated_quote{x, sep}: _separated{_double_quote{x}, sep}
 
@@ -130,17 +131,19 @@ conformance_string : _quote conformance_identification _quote
 conformance_identification : "STD_1149_1_1990" | "STD_1149_1_1993" | "STD_1149_1_2001" | "STD_1149_1_2013" 
 
 # B.8.7 
-device_package_pin_mappings : pin_map_statement pin_mappings 
+device_package_pin_mappings : pin_map_statement pin_mapping_list
 pin_map_statement : "attribute" "PIN_MAP" "of" component_name _colon "entity" "is" "PHYSICAL_PIN_MAP" _semicolon 
-pin_mappings : ( pin_mapping )+ 
+pin_mapping_list : ( pin_mapping )+ 
 pin_mapping : "constant" pin_mapping_name _colon "PIN_MAP_STRING" ":=" map_string _semicolon 
 pin_mapping_name : _vhdl_identifier 
-map_string : _string 
-port_map : (_comma)([port])* 
-port : port_name _colon pin_or_list 
-pin_or_list : pin_desc | pin_list 
-pin_list : _left_paren (_comma)([pin_desc])* _right_paren 
-pin_desc : "OPEN" | "TIE0" | "TIE1" | pin_id 
+map_string : _separated_quote{_port_map, "&"}
+_port_map : _separated{port, _comma} 
+port : port_name _colon _pin_or_list 
+_pin_or_list : _pin_desc | pin_list
+pin_list : _pin_multi_list | _pin_single_list
+_pin_single_list : _left_paren _separated{_pin_desc, _comma} _right_paren [_comma]
+_pin_multi_list : _left_paren _multistring{_pin_desc, _comma} _right_paren [_comma]
+_pin_desc : "OPEN" | "TIE0" | "TIE1" | pin_id 
 pin_id : _integer | _vhdl_identifier 
 
 # B.8.8 

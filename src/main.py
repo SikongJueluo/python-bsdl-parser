@@ -31,6 +31,11 @@ def main():
             result = bsdl_parser.GetBoundaryScanRegDesp()
             with open(args.output, "w", encoding="utf-8") as output_file:
                 json.dump(result, output_file, indent=2)
+        elif args.method == "GetPinMap":
+            bsdl_parser = BsdlParser(args.filename)
+            result = bsdl_parser.GetPinMap()
+            with open(args.output, "w", encoding="utf-8") as output_file:
+                json.dump(result, output_file, indent=2)
         else:
             bsdl_parser = BsdlParser(args.filename)
             bsdl_parser.ToJson(args.output, args.type, args.seperate)
@@ -42,6 +47,10 @@ def main():
         elif args.method == "GetBoundaryScanRegDesp":
             bsdl_parser = BsdlParser(args.filename)
             result = bsdl_parser.GetBoundaryScanRegDesp()
+            print(json.dumps(result, indent=2))
+        elif args.method == "GetPinMap":
+            bsdl_parser = BsdlParser(args.filename)
+            result = bsdl_parser.GetPinMap()
             print(json.dumps(result, indent=2))
         else:
             bsdl_parser = BsdlParser(args.filename)

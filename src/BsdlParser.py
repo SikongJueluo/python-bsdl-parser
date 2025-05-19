@@ -125,6 +125,62 @@ class BsdlParser:
                 }
             return {"port_number": len(result), "ports": result}
 
+    def GetPinMap(self, mapName: str = None) -> dict:
+        if self.filepath is None:
+            raise ValueError("File path is not set.")
+            
+        with open(self.filepath, "r", encoding="utf-8") as file:
+            text = file.read()
+            self.ast = self.parser.parse(text)
+            pinMappingList = BsdlParser.AstToDict(
+                BsdlParser.FindType(self.ast, "pin_mapping_list"),
+                False,
+            )
+            if pinMappingList is None:
+                raise ValueError(
+                    "No pin_mapping_list found in the BSDL file."
+                )
+            
+            if mapName is None:
+                if isinstance(pinMappingList, list):
+                    pinMapping = pinMappingList[0]
+                elif isinstance(pinMappingList, dict):
+                    pinMapping = pinMappingList["pin_mapping"]
+                else:
+                    raise ValueError(
+                        "No pin_mapping found in the pin_mapping_list."
+                    )
+            else:
+                if isinstance(pinMappingList, list):
+                    pinMapping = None
+                    for item in pinMappingList:
+                        if item.get("pin_mapping_name") == mapName:
+                            pinMapping = item
+                            break
+
+                    if pinMapping is None:
+                        raise ValueError(
+                            f"No pin_mapping_list found in the BSDL file with name {mapName}."
+                        )
+                else:
+                    raise ValueError(
+                        f"No value could find {mapName}."
+                    )
+                    
+            # 处理引脚映射
+            result = {}
+            for item in pinMapping["map_string"]:
+                itemValue = item["port"].get("pin_id")
+                if itemValue is None:
+                    itemValue = item["port"].get("pin_list")
+                if itemValue is None:
+                    raise ValueError( "No pin_id or pin_list found in the pin_mapping.")
+                result[item["port"]["port_name"]] = itemValue
+
+            return {"pin_map_name": pinMapping["pin_mapping_name"], "pin_map": result}
+
+        
+
     def GetBoundaryScanRegDesp(self) -> dict:
         if self.filepath is None:
             raise ValueError("File path is not set.")
@@ -145,13 +201,13 @@ class BsdlParser:
             regsDict = {}
             for item in boundaryScanRegDesp["boundary_register_stmt"]:
                 if isinstance(item, dict) and item.get("component_name") is None:
-                    regsDict[item["cell_entry"]["cell_number"]] = item
+                    regsDict[item["cell_entry"]["cell_number"]] = item["cell_entry"]
             return {
                 "register_length": len(regsDict),
                 "registers": list(
                     sorted(
                         regsDict.values(),
-                        key=lambda x: int(x["cell_entry"]["cell_number"]),
+                        key=lambda x: int(x["cell_number"]),
                     )
                 ),
             }
